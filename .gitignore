@@ -1,0 +1,7 @@
+*.o
+*.so
+main
+server
+example/*.o
+example/client
+example/server
