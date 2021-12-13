@@ -5,3 +5,5 @@ server
 example/*.o
 example/client
 example/server
+testimage*
+test/*

@@ -2,10 +2,17 @@
 #include "mfs.h"
 #include "udp.h"
 
+int sd, rc;
+struct sockaddr_in addrSnd, addrRcv;
+
 int MFS_Init(char *hostname, int port) {
-    printf("init %s %d\n", hostname, port);
-    int sd = UDP_Open(port);
-    printf("sd: %d\n", sd);
+    // printf("init %s %d\n", hostname, port);
+    sd = UDP_Open(port);
+    if (sd < 0) {
+        return -1;
+    }
+    rc = UDP_FillSockAddr(&addrSnd, hostname, port);
+    // printf("sd: %d, rc: %d\n", sd, rc);
     return 0;
 }
 
