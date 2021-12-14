@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := all
 
 server:
-	gcc -Wall -Werror  -c server.c
+	gcc -Wall -Werror -c server.c
 	gcc server.o -o server udp.c
 
 client:
