@@ -503,6 +503,265 @@ int mfs_creat(int pinum, int type, char *name) {
     return 0;
 }
 
+int mfs_write(int inum, char *buffer, int block) {
+    int disk_address = getAddressOrError(inum);
+    if (disk_address == -1) {
+        return -1;
+    }
+
+    if (block >= MAX_FILE_BLOCKS || block < 0) {
+        return -1;
+    }
+
+    struct INode inode;
+    lseek(fd, disk_address, SEEK_SET);
+    int n_read = read(fd, &inode, sizeof(struct INode));
+    if (n_read < 0) {
+        fprintf(stderr, "server:: read cannot read inode\n");
+        exit(1);
+    }
+
+    // Given file has to be a regular file
+    if (inode.stat.type != MFS_REGULAR_FILE) {
+        return -1;
+    }
+
+    // New address
+    int ptr_data = CR.endOfLog;
+    int ptr_inode = ptr_data + MFS_BLOCK_SIZE;
+    int ptr_inode_map = ptr_inode + MFS_BLOCK_SIZE;
+    int ptr_end_of_log = ptr_inode_map + MFS_BLOCK_SIZE;
+
+    // Update INode
+    inode.ptr[block] = ptr_data;
+    if (inode.stat.size < (block + 1) * MFS_BLOCK_SIZE) {
+        inode.stat.size = (block + 1) * MFS_BLOCK_SIZE;
+    }
+
+    // Update INode Map & cached map
+    int pieces_no, offset;
+    getPieceNoAndOffset(inum, &pieces_no, &offset);
+    int inode_map[MAX_INODES_MAP_ENTRIES];
+    for (int i = 0; i < MAX_INODES_MAP_ENTRIES; i++) {
+        inode_map[i] = cached_map[pieces_no][i];
+    }
+    inode_map[offset] = ptr_inode;
+    cached_map[pieces_no][offset] = ptr_inode;
+
+    // Update CR
+    CR.endOfLog = ptr_end_of_log;
+    CR.iNodeMapPtr[pieces_no] = ptr_inode_map;
+
+    // Write Data
+    lseek(fd, ptr_data, SEEK_SET);
+    int n_write = write(fd, buffer, MFS_BLOCK_SIZE);
+    if (n_write < 0) {
+        fprintf(stderr, "server:: write cannot write child block\n");
+        exit(1);
+    }
+
+    // Write INode
+    lseek(fd, ptr_inode, SEEK_SET);
+    n_write = write(fd, &inode, MFS_BLOCK_SIZE);
+    if (n_write < 0) {
+        fprintf(stderr, "server:: write cannot write inode\n");
+        exit(1);
+    }
+
+    // Write INode Map
+    lseek(fd, ptr_inode_map, SEEK_SET);
+    n_write = write(fd, &inode_map, MFS_BLOCK_SIZE);
+    if (n_write < 0) {
+        fprintf(stderr, "server:: write cannot write inode map\n");
+        exit(1);
+    }
+
+    // Write CR
+    lseek(fd, 0, SEEK_SET);
+    n_write = write(fd, &CR, sizeof(struct CheckpointRegion));
+    if (n_write < 0) {
+        fprintf(stderr, "server:: write cannot update CR\n");
+        exit(1);
+    }
+
+    int fsync_status = fsync(fd);
+    if (fsync_status < 0) {
+        fprintf(stderr, "server:: write cannot fsync to file\n");
+        exit(1);
+    }
+
+    return 0;
+}
+
+int mfs_unlink(int pinum, char *name) {
+    int disk_address = getAddressOrError(pinum);
+    if (disk_address == -1) {
+        return -1;
+    }
+
+    int parent_pieces_no, parent_offset;
+    getPieceNoAndOffset(pinum, &parent_pieces_no, &parent_offset);
+
+    struct INode parent_inode;
+    lseek(fd, disk_address, SEEK_SET);
+    int n_read = read(fd, &parent_inode, sizeof(struct INode));
+    if (n_read < 0) {
+        fprintf(stderr, "server:: lookup cannot read parent inode\n");
+        exit(1);
+    }
+
+    if (parent_inode.stat.type != MFS_DIRECTORY) {
+        return -1;
+    }
+
+    for (int i = 0; i < MAX_FILE_BLOCKS; i++) {
+        if (parent_inode.ptr[i] != -1) {
+            MFS_DirEnt_t directory_entry[MAX_NUM_DIR_ENTRY_PER_BLOCK];
+            lseek(fd, parent_inode.ptr[i], SEEK_SET);
+            n_read = read(fd, &directory_entry, sizeof(MFS_DirEnt_t) * MAX_NUM_DIR_ENTRY_PER_BLOCK);
+            if (n_read < 0) {
+                fprintf(stderr, "server:: unlink cannot read parent block\n");
+                exit(1);
+            }
+
+            for (int j = 0; j < MAX_NUM_DIR_ENTRY_PER_BLOCK; j++) {
+                // Found
+                if (directory_entry[j].inum != -1 && strcmp(directory_entry[j].name, name) == 0) {
+                    // Read child inode
+                    struct INode child_inode;
+                    lseek(fd, directory_entry[j].inum, SEEK_SET);
+                    n_read = read(fd, &child_inode, sizeof(struct INode));
+                    if (n_read < 0) {
+                        fprintf(stderr, "server:: unlink cannot read child inode\n");
+                        exit(1);
+                    }
+
+                    // Check if dir
+                    if (child_inode.stat.type == MFS_DIRECTORY) {
+                        // Check if not empty
+                        for (int k = 0; k < MAX_FILE_BLOCKS; k++) {
+                            MFS_DirEnt_t child_dir_entry[MAX_NUM_DIR_ENTRY_PER_BLOCK];
+                            lseek(fd, child_inode.ptr[k], SEEK_SET);
+                            n_read = read(fd, &child_dir_entry, sizeof(MFS_DirEnt_t) * MAX_NUM_DIR_ENTRY_PER_BLOCK);
+                            if (n_read < 0) {
+                                fprintf(stderr, "server:: lookup cannot read child block\n");
+                                exit(1);
+                            }
+                            
+                            for (int m = 0; m < MAX_NUM_DIR_ENTRY_PER_BLOCK; m++) {
+                                if (child_dir_entry[m].inum != -1 && child_dir_entry[m].inum != directory_entry[j].inum && child_dir_entry[m].inum != pinum) {
+                                    return -1;
+                                }
+                            }
+                        }
+                    }
+
+                    // Child offset
+                    int child_pieces_no, child_offset;
+                    getPieceNoAndOffset(directory_entry[j].inum, &child_pieces_no, &child_offset);
+
+                    // New address
+                    int ptr_parent_data = CR.endOfLog;
+                    int ptr_parent_inode = ptr_parent_data + MFS_BLOCK_SIZE;
+                    int ptr_child_inode_map = ptr_parent_inode + MFS_BLOCK_SIZE;
+                    int ptr_parent_inode_map = ptr_child_inode_map + MFS_BLOCK_SIZE;
+                    int ptr_end_of_log = ptr_parent_inode_map;
+                    if (parent_pieces_no != child_pieces_no) {
+                        ptr_end_of_log += MFS_BLOCK_SIZE;
+                    }
+
+                    // Update parent data
+                    directory_entry[j].inum = -1;
+
+                    // Update parent inode
+                    parent_inode.ptr[i] = ptr_parent_data;
+
+                    // Parent's inode map
+                    int parent_inode_map[MAX_INODES_MAP_ENTRIES];
+                    for (int i = 0; i < MAX_INODES_MAP_ENTRIES; i++) {
+                        parent_inode_map[i] = cached_map[parent_pieces_no][i];
+                    }
+
+                    // Update inode map & update cache
+                    parent_inode_map[parent_offset] = ptr_parent_inode;
+                    cached_map[parent_pieces_no][parent_offset] = ptr_parent_inode;
+
+                    // Child's inode map
+                    int child_inode_map[MAX_INODES_MAP_ENTRIES];
+                    for (int i = 0; i < MAX_INODES_MAP_ENTRIES; i++) {
+                        child_inode_map[i] = cached_map[child_pieces_no][i];
+                    }
+
+                    // Remove child from inode map & cache
+                    child_inode_map[child_offset] = -1;
+                    cached_map[child_pieces_no][child_offset] = -1;
+
+                    // Update CR
+                    CR.endOfLog = ptr_end_of_log;
+                    if (parent_pieces_no == child_pieces_no) {
+                        child_inode_map[parent_offset] = ptr_parent_inode;
+                    } else {
+                        CR.iNodeMapPtr[parent_pieces_no] = ptr_parent_inode_map;
+                    }
+                    CR.iNodeMapPtr[child_pieces_no] = ptr_child_inode_map;
+
+                    // Write parent data
+                    lseek(fd, ptr_parent_data, SEEK_SET);
+                    int n_write = write(fd, &directory_entry, MFS_BLOCK_SIZE);
+                    if (n_write < 0) {
+                        fprintf(stderr, "server:: unlink cannot write parent directory block\n");
+                        exit(1);
+                    }
+
+                    // Write parent inode
+                    lseek(fd, ptr_parent_inode, SEEK_SET);
+                    n_write = write(fd, &parent_inode, MFS_BLOCK_SIZE);
+                    if (n_write < 0) {
+                        fprintf(stderr, "server:: unlink cannot write parent inode\n");
+                        exit(1);
+                    }
+    
+                    // Write child inode map
+                    lseek(fd, ptr_child_inode_map, SEEK_SET);
+                    n_write = write(fd, &child_inode_map, MFS_BLOCK_SIZE);
+                    if (n_write < 0) {
+                        fprintf(stderr, "server:: unlink cannot write child inode map\n");
+                        exit(1);
+                    }
+
+                    // Write parent inode map if it is NOT the same as child's inode map
+                    if (parent_pieces_no != child_pieces_no) {
+                        lseek(fd, ptr_parent_inode_map, SEEK_SET);
+                        n_write = write(fd, &parent_inode_map, MFS_BLOCK_SIZE);
+                        if (n_write < 0) {
+                            fprintf(stderr, "server:: unlink cannot write parent inode map\n");
+                            exit(1);
+                        }
+                    }
+
+                    // Write CR
+                    lseek(fd, 0, SEEK_SET);
+                    n_write = write(fd, &CR, sizeof(struct CheckpointRegion));
+                    if (n_write < 0) {
+                        fprintf(stderr, "server:: unlink cannot update CR\n");
+                        exit(1);
+                    }
+
+                    int fsync_status = fsync(fd);
+                    if (fsync_status < 0) {
+                        fprintf(stderr, "server:: unlink cannot fsync to file\n");
+                        exit(1);
+                    }
+
+                    return 0;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
 void setup() {
     // Setup connection port
     sd = UDP_Open(portnum);
@@ -782,3 +1041,33 @@ int main(int argc, char *argv[]) {
     // for (int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
     //     printf("%s:%d\n", dir_data[i].name, dir_data[i].inum);
     // }
+
+
+
+    // WRITE
+    // int creat_status = mfs_creat(0, MFS_REGULAR_FILE, "file_A");
+    // printf("creat_status:%d\n", creat_status);
+
+    // int lookup_inum = mfs_lookup(0, "file_A");
+    // printf("lookup_status:%d\n", lookup_inum);
+
+    // char message[4096];
+    // strcpy(message, "This is a file");
+    // int write_status = mfs_write(lookup_inum, message, 0);
+    // printf("write_status:%d\n", write_status);
+
+    // char result[4096];
+    // int read_status = mfs_read(lookup_inum, result, 0);
+    // printf("read_status:%d\n", read_status);
+    // printf("result:%s\n", result);
+
+
+    // Unlink
+    // int lookup_inum = mfs_lookup(0, "dir_A");
+    // printf("lookup_status:%d\n", lookup_inum);
+
+    // int unlink_status = mfs_unlink(0, "dir_A");
+    // printf("unlink_status:%d\n", unlink_status);
+
+    // lookup_inum = mfs_lookup(0, "dir_A");
+    // printf("lookup_status:%d\n", lookup_inum);
