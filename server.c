@@ -5,8 +5,6 @@
 #include "udp.h"
 #include "mfs.h"
 
-#define BUFFER_SIZE (1000)
-
 #define ROOT 0
 
 #define MAX_INODES 4096
@@ -903,14 +901,84 @@ int main(int argc, char *argv[]) {
     while (1) {
         struct sockaddr_in addr;
         char message[BUFFER_SIZE];
-        printf("server:: waiting...\n");
         int rc = UDP_Read(sd, &addr, message, BUFFER_SIZE);
-        printf("server:: read message [size:%d contents:(%s)]\n", rc, message);
         if (rc > 0) {
-                char reply[BUFFER_SIZE];
-                sprintf(reply, "goodbye world");
-                rc = UDP_Write(sd, &addr, reply, BUFFER_SIZE);
-            printf("server:: reply\n");
+            Method method;
+            memcpy(&method, message, sizeof(Method));
+
+            if (method == Lookup) {
+                MFS_Lookup_Request request;
+                memcpy(&request, message, sizeof(MFS_Lookup_Request));
+
+                int status = mfs_lookup(request.pinum, request.name);
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &status, sizeof(int));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE);
+            } else if (method == Stat) {
+                MFS_Stat_Request request;
+                MFS_Stat_t result;
+                memcpy(&request, message, sizeof(MFS_Stat_Request));
+
+                MFS_Stat_Response response;
+                response.status = mfs_stat(request.inum, &result);
+                response.stat = result;
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &response, sizeof(MFS_Stat_Response));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE);
+            } else if (method == Write) {
+                MFS_Write_Request request;
+                memcpy(&request, message, sizeof(MFS_Write_Request));
+
+                int status = mfs_write(request.inum, request.buffer, request.block);
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &status, sizeof(int));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE);
+            } else if (method == Read) {
+                MFS_Read_Request request;
+                memcpy(&request, message, sizeof(MFS_Read_Request));
+
+                MFS_Read_Response response;
+                response.status = mfs_read(request.inum, response.buffer, request.block);
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &response, sizeof(MFS_Read_Response));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE);
+            } else if (method == Creat) {
+                MFS_Creat_Request request;
+                memcpy(&request, message, sizeof(MFS_Creat_Request));
+
+                int status = mfs_creat(request.pinum, request.type, request.name);
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &status, sizeof(int));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE); 
+            } else if (method == Unlink) {
+                MFS_Unlink_Request request;
+                memcpy(&request, message, sizeof(MFS_Unlink_Request));
+
+                int status = mfs_unlink(request.pinum, request.name);
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &status, sizeof(int));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE); 
+            } else if (method == ShutDown) {
+                int status = 0;
+
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &status, sizeof(int));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE);
+
+                shutDown(); 
+            } else {
+                int status = -1;
+                printf("server:: invalid response received\n");
+                char response_buffer[BUFFER_SIZE];
+                memcpy(response_buffer, &status, sizeof(int));
+                rc = UDP_Write(sd, &addr, response_buffer, BUFFER_SIZE);
+            }
         } 
     }
     
