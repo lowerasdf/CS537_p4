@@ -628,9 +628,13 @@ int mfs_unlink(int pinum, char *name) {
             for (int j = 0; j < MAX_NUM_DIR_ENTRY_PER_BLOCK; j++) {
                 // Found
                 if (directory_entry[j].inum != -1 && strcmp(directory_entry[j].name, name) == 0) {
+                    // Child offset
+                    int child_pieces_no, child_offset;
+                    getPieceNoAndOffset(directory_entry[j].inum, &child_pieces_no, &child_offset);
+                    
                     // Read child inode
                     struct INode child_inode;
-                    lseek(fd, directory_entry[j].inum, SEEK_SET);
+                    lseek(fd, cached_map[child_pieces_no][child_offset], SEEK_SET);
                     n_read = read(fd, &child_inode, sizeof(struct INode));
                     if (n_read < 0) {
                         fprintf(stderr, "server:: unlink cannot read child inode\n");
@@ -641,25 +645,23 @@ int mfs_unlink(int pinum, char *name) {
                     if (child_inode.stat.type == MFS_DIRECTORY) {
                         // Check if not empty
                         for (int k = 0; k < MAX_FILE_BLOCKS; k++) {
-                            MFS_DirEnt_t child_dir_entry[MAX_NUM_DIR_ENTRY_PER_BLOCK];
-                            lseek(fd, child_inode.ptr[k], SEEK_SET);
-                            n_read = read(fd, &child_dir_entry, sizeof(MFS_DirEnt_t) * MAX_NUM_DIR_ENTRY_PER_BLOCK);
-                            if (n_read < 0) {
-                                fprintf(stderr, "server:: lookup cannot read child block\n");
-                                exit(1);
-                            }
-                            
-                            for (int m = 0; m < MAX_NUM_DIR_ENTRY_PER_BLOCK; m++) {
-                                if (child_dir_entry[m].inum != -1 && child_dir_entry[m].inum != directory_entry[j].inum && child_dir_entry[m].inum != pinum) {
-                                    return -1;
+                            if (child_inode.ptr[k] != -1) {
+                                MFS_DirEnt_t child_dir_entry[MAX_NUM_DIR_ENTRY_PER_BLOCK];
+                                lseek(fd, child_inode.ptr[k], SEEK_SET);
+                                n_read = read(fd, &child_dir_entry, sizeof(MFS_DirEnt_t) * MAX_NUM_DIR_ENTRY_PER_BLOCK);
+                                if (n_read < 0) {
+                                    fprintf(stderr, "server:: lookup cannot read child block\n");
+                                    exit(1);
+                                }
+                                
+                                for (int m = 0; m < MAX_NUM_DIR_ENTRY_PER_BLOCK; m++) {
+                                    if (child_dir_entry[m].inum != -1 && child_dir_entry[m].inum != directory_entry[j].inum && child_dir_entry[m].inum != pinum) {
+                                        return -1;
+                                    }
                                 }
                             }
                         }
                     }
-
-                    // Child offset
-                    int child_pieces_no, child_offset;
-                    getPieceNoAndOffset(directory_entry[j].inum, &child_pieces_no, &child_offset);
 
                     // New address
                     int ptr_parent_data = CR.endOfLog;
