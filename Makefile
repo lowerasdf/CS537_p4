@@ -1,16 +1,28 @@
+CC     := gcc
+CFLAGS := -Wall -Werror -g
+LDFLAGS:= -L. -lmfs
+
+LIB	   := mfs.c
+
+DEPS   := udp.c
+
 .PHONY: all
-.DEFAULT_GOAL := all
+all: libmfs.so server
 
-server:
-	gcc -Wall -Werror -c server.c
-	gcc server.o -o server udp.c
+server: server.o ${DEPS}
+	${CC} ${CFLAGS} -o server server.o ${DEPS}
 
-client:
-	gcc -fPIC -g -c -Wall libmfs.c
-	gcc -shared -Wl,-soname,libmfs.so -o libmfs.so libmfs.o -lc udp.c
-	gcc -o main main.c -Wall -L. -lmfs
+client: client.o libmfs.so
+	${CC} ${CFLAGS} -o client client.o ${LDFLAGS}
+
+libmfs.so : mfs.o ${DEPS}
+	${CC} ${CFLAGS} -shared -Wl,-soname,libmfs.so -o libmfs.so mfs.o udp.c -lc
 
 clean:
-	rm -rf libmfs.o libmfs.so main server server.o
+	rm -f ./client ./server *.o libmfs.so
 
-all: server client
+mfs.o : ${LIB} Makefile
+	${CC} ${CFLAGS} -c -fPIC ${LIB}
+
+%.o: %.c Makefile
+	${CC} ${CFLAGS} -c $<

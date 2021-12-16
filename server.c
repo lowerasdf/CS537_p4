@@ -333,7 +333,10 @@ int mfs_creat(int pinum, int type, char *name) {
     // Create child's inode
     MFS_Stat_t child_stat;
     child_stat.type = type;
-    child_stat.size = MFS_BLOCK_SIZE;
+    child_stat.size = 0;
+    if (type == MFS_DIRECTORY) {
+        child_stat.size = MFS_BLOCK_SIZE;
+    }
     struct INode child_inode;
     child_inode.stat = child_stat;
     for (int i = 0; i < MAX_FILE_BLOCKS; i++) {

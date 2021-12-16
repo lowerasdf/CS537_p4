@@ -7,3 +7,4 @@ example/client
 example/server
 testimage*
 test/*
+Makefile_OLD
