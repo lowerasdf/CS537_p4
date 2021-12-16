@@ -8,7 +8,12 @@ int sd, rc;
 struct sockaddr_in addrSnd, addrRcv;
 
 int MFS_Init(char *hostname, int port) {
-    sd = UDP_Open(20010);
+    for (int i = 0; i < 10000; i++) {
+        sd = UDP_Open(20000 + i);
+        if (sd >= 0) {
+            break;
+        }
+    }
     if (sd < 0) {
         return -1;
     }
