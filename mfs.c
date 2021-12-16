@@ -13,8 +13,6 @@ int MFS_Init(char *hostname, int port) {
         return -1;
     }
 
-    printf("sd:%d\n", sd);
-
     rc = UDP_FillSockAddr(&addrSnd, hostname, port);
     return 0;
 }
@@ -30,16 +28,28 @@ int MFS_Lookup(int pinum, char *name) {
     request.pinum = pinum;
     strcpy(request.name, name);
 
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
 
-    // Wait response
-    int status;
-    rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+    int status = -1;
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+        }
+    } while(!ready);
 
     return status;
 }
@@ -53,17 +63,29 @@ int MFS_Stat(int inum, MFS_Stat_t *m) {
     MFS_Stat_Request request;
     request.method = Stat;
     request.inum = inum;
-    
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
 
-    // Wait response
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
+
     MFS_Stat_Response response;
-    UDP_Read(sd, &addrRcv, (char *) &response, sizeof(MFS_Stat_Response));
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char *) &response, sizeof(MFS_Stat_Response));
+        }
+    } while(!ready);
 
     m->type = response.stat.type;
     m->size = response.stat.size;
@@ -84,17 +106,29 @@ int MFS_Write(int inum, char *buffer, int block) {
         request.buffer[i]=buffer[i];
     }
     request.block = block;
-    
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
 
-    // Wait response
-    int status;
-    rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
+
+    int status = -1;
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+        }
+    } while(!ready);
 
     return status;
 }
@@ -110,16 +144,28 @@ int MFS_Read(int inum, char *buffer, int block) {
     request.inum = inum;
     request.block = block;
     
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
 
-    // Wait response
     MFS_Read_Response response;
-    rc = UDP_Read(sd, &addrRcv, (char*) &response, sizeof(MFS_Read_Response));
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char*) &response, sizeof(MFS_Read_Response));
+        }
+    } while(!ready);
 
     if (rc > -1) {
         for (int i = 0; i < MFS_BLOCK_SIZE; i++) {
@@ -142,16 +188,28 @@ int MFS_Creat(int pinum, int type, char *name) {
     request.type = type;
     strcpy(request.name, name);
 
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
 
-    // Wait response
-    int status;
-    rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+    int status = -1;
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+        }
+    } while(!ready);
 
     return status;
 }
@@ -167,16 +225,28 @@ int MFS_Unlink(int pinum, char *name) {
     request.pinum = pinum;
     strcpy(request.name, name);
 
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
 
-    // Wait response
-    int status;
-    rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+    int status = -1;
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+        }
+    } while(!ready);
 
     return status;
 }
@@ -190,16 +260,28 @@ int MFS_Shutdown() {
     MFS_Shutdown_Request request;
     request.method = ShutDown;
 
-    // Send request
-    rc = UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
-    if (rc < 0) {
-        printf("client:: failed to send\n");
-        return -1;
-    }
+    int ready = 0;
+    fd_set rfds;
+    struct timeval tv;
 
-    // Wait response
-    int status;
-    rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+    int status = -1;
+
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(sd, &rfds);
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        
+        // Send request
+        UDP_Write(sd, &addrSnd, (char *) &request, BUFFER_SIZE);
+        ready = select(sd+1, &rfds, NULL, NULL, &tv);
+        if (ready == -1) {
+            return -1;
+        } else if (ready) {
+            // Wait response
+            rc = UDP_Read(sd, &addrRcv, (char *) &status, sizeof(int));
+        }
+    } while(!ready);
 
     return status;
 }
