@@ -1,5 +1,5 @@
 # CS537 P4: Distributed File System
-A distributed file server that can be reached using shared library on the client side by establishing UDP communications. The file system is a simple version of [Log-Structured File System](https://en.wikipedia.org/wiki/Log-structured_file_system). It stores the data in a persistent file image that can be restore upon reboot.
+A distributed file server that can be reached using shared library on the client side by establishing UDP communications. The file system is a simple version of [Log-Structured File System](https://en.wikipedia.org/wiki/Log-structured_file_system). It stores the data in a persistent file image that can be restored upon reboot.
 
 ##### Table of Contents
 * [Installation](#installation)
