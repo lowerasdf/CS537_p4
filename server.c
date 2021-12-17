@@ -27,19 +27,10 @@ struct INode {
     int ptr[MAX_FILE_BLOCKS];
 };
 
-// struct INodeMap {
-//     int map[MAX_INODES_MAP_ENTRIES];
-// };
-
 struct CheckpointRegion {
     int endOfLog;
     int iNodeMapPtr[MAX_NUM_INODES_PIECES];
 } CR;
-
-// struct CheckpointRegionInMemory {
-//     int endOfLog;
-//     struct INode iNodePiecesMap[MAX_NUM_INODES_PIECES][MAX_INODES_MAP_ENTRIES];
-// };
 
 int cached_map[MAX_NUM_INODES_PIECES][MAX_INODES_MAP_ENTRIES];
 
@@ -284,8 +275,6 @@ int mfs_creat(int pinum, int type, char *name) {
         }
     }
 
-    // printf("free_idx_block:%d, free_idx_offset:%d, free_block_found:%d, free_offset_found:%d\n", free_idx_block, free_idx_offset, free_block_found, free_offset_found);
-
     // Directory full
     if (free_offset_found == 0 && free_block_found == 0) {
         return -1;
@@ -306,14 +295,6 @@ int mfs_creat(int pinum, int type, char *name) {
         ptr_end_of_log += MFS_BLOCK_SIZE;
     }
 
-    // printf("ptr_child_data:%d\n", ptr_child_data);
-    // printf("ptr_child_inode:%d\n", ptr_child_inode);
-    // printf("ptr_parent_data:%d\n", ptr_parent_data);
-    // printf("ptr_parent_inode:%d\n", ptr_parent_inode);
-    // printf("ptr_child_inode_map:%d\n", ptr_child_inode_map);
-    // printf("ptr_parent_inode_map:%d\n", ptr_parent_inode_map);
-    // printf("ptr_end_of_log:%d\n", ptr_end_of_log);
-
     // Create child's data
     MFS_DirEnt_t child_data[MAX_NUM_DIR_ENTRY_PER_BLOCK];
     if (type == MFS_DIRECTORY) {
@@ -325,10 +306,6 @@ int mfs_creat(int pinum, int type, char *name) {
             child_data[i].inum = -1;
         }
     }
-
-    // for (int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
-    //     printf("%d:%d\n", i, child_data[i].inum);
-    // }
 
     // Create child's inode
     MFS_Stat_t child_stat;
@@ -345,9 +322,6 @@ int mfs_creat(int pinum, int type, char *name) {
     if (type == MFS_DIRECTORY) {
         child_inode.ptr[0] = ptr_child_data;
     }
-    // for (int i = 0; i < MAX_FILE_BLOCKS; i++) {
-    //     printf("%d:%d\n", i, child_inode.ptr[i]);
-    // }
 
     // Update parent
     MFS_DirEnt_t dir_data[MAX_NUM_DIR_ENTRY_PER_BLOCK];
@@ -378,12 +352,6 @@ int mfs_creat(int pinum, int type, char *name) {
             inode.stat.size = (free_idx_block + 1) * MFS_BLOCK_SIZE;
         }
     }
-    // for(int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
-    //     printf("%d:%d\n", i, dir_data[i].inum);
-    // }
-    // for(int i = 0; i < MAX_FILE_BLOCKS; i++) {
-    //     printf("%d:%d\n", i, inode.ptr[i]);
-    // }
 
     // Parent's inode map
     int parent_inode_map[MAX_INODES_MAP_ENTRIES];
@@ -414,18 +382,6 @@ int mfs_creat(int pinum, int type, char *name) {
     }
     CR.iNodeMapPtr[pieces_no] = ptr_child_inode_map;
 
-    // for(int i = 0; i < MAX_INODES_MAP_ENTRIES; i++) {
-    //     printf("parent %d:%d\n", i, parent_inode_map[i]);
-    // }
-    // for(int i = 0; i < MAX_INODES_MAP_ENTRIES; i++) {
-    //     printf("child %d:%d\n", i, child_inode_map[i]);
-    // }
-
-    // printf("CR.endOfLog:%d\n", CR.endOfLog);
-    // for (int i = 0; i < MAX_NUM_INODES_PIECES; i++) {
-    //     printf("%d:%d\n", i, CR.iNodeMapPtr[i]);
-    // }
-
     // Write child_data
     if (type == MFS_DIRECTORY) {
         lseek(fd, ptr_child_data, SEEK_SET);
@@ -451,15 +407,6 @@ int mfs_creat(int pinum, int type, char *name) {
         fprintf(stderr, "server:: creat cannot write parent directory block\n");
         exit(1);
     }
-
-    // fsync(fd);
-    // MFS_DirEnt_t data_test[MAX_NUM_DIR_ENTRY_PER_BLOCK];
-    // lseek(fd, ptr_parent_data, SEEK_SET);
-    // int read_data_status = read(fd, &data_test, sizeof(MFS_DirEnt_t) * MAX_NUM_DIR_ENTRY_PER_BLOCK);
-    // printf("read_data_status:%d\n", read_data_status);  
-    // for(int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
-    //     printf("%s:%d\n", data_test[i].name, data_test[i].inum);
-    // }
 
     // Write parent inode
     lseek(fd, ptr_parent_inode, SEEK_SET);
@@ -989,158 +936,3 @@ int main(int argc, char *argv[]) {
     
     return 0; 
 }
-    // TEST SETUP
-    // struct CheckpointRegion CR_TEST;
-    // MFS_DirEnt_t root_data_TEST[MAX_NUM_DIR_ENTRY_PER_BLOCK];
-    // struct INode root_inode_TEST;
-    // int first_inode_map_TEST[MAX_INODES_MAP_ENTRIES];
-
-    // lseek(fd, 0, SEEK_SET);
-    // read(fd, &CR_TEST, sizeof(struct CheckpointRegion));
-    // printf("[CR] endOfLog: %d, [%d, %d, %d, %d]\n", CR_TEST.endOfLog, CR_TEST.iNodeMapPtr[0], CR_TEST.iNodeMapPtr[1], CR_TEST.iNodeMapPtr[2], CR_TEST.iNodeMapPtr[3]);
-
-    // lseek(fd, sizeof(struct CheckpointRegion), SEEK_SET);
-    // read(fd, &root_data_TEST, MFS_BLOCK_SIZE);
-    // printf("[Root Data] dir1.name:%s, dir1.inum:%d, dir2.name:%s, dir2.inum:%d\n", root_data_TEST[0].name, root_data_TEST[0].inum, root_data_TEST[1].name, root_data_TEST[1].inum);
-
-    // lseek(fd, sizeof(struct CheckpointRegion) + MFS_BLOCK_SIZE, SEEK_SET);
-    // read(fd, &root_inode_TEST, sizeof(struct INode));
-    // printf("[Root INode] type:%d, size:%d, ptr1:%d\n", root_inode_TEST.stat.type, root_inode_TEST.stat.size, root_inode_TEST.ptr[0]);
-
-    // lseek(fd, sizeof(struct CheckpointRegion) + (2 * MFS_BLOCK_SIZE), SEEK_SET);
-    // read(fd, &first_inode_map_TEST, sizeof(int) * MAX_INODES_MAP_ENTRIES);
-    // printf("[First INode Map] ptr1:%d, ptr2:%d, ptr3:%d, ptr4:%d\n", first_inode_map_TEST[0], first_inode_map_TEST[1], first_inode_map_TEST[2], first_inode_map_TEST[3]);
-
-
-    // READ/WRITE
-    // struct CheckpointRegion CR;
-    // CR.endOfLog = 10;
-    // CR.iNodeMapPtr[0] = 1;
-    // CR.iNodeMapPtr[1] = 5;
-    // CR.iNodeMapPtr[3] = 10;
-    // printf("endOfLog: %d, [%d, %d, %d, %d]\n", CR.endOfLog, CR.iNodeMapPtr[0], CR.iNodeMapPtr[1], CR.iNodeMapPtr[2], CR.iNodeMapPtr[3]);
-    // off_t off = lseek(fd, 0, SEEK_SET);
-    // printf("off: %d\n", (int) off);
-    // int n_write = write(fd, &CR, sizeof(struct CheckpointRegion));
-    // printf("n_write: %d, err_no:%d, size:%ld\n", n_write, errno, sizeof(struct CheckpointRegion));
-
-    // struct CheckpointRegion result;
-    // result.endOfLog = 5;
-    // printf("endOfLog: %d, [%d, %d, %d, %d]\n", result.endOfLog, result.iNodeMapPtr[0], result.iNodeMapPtr[1], result.iNodeMapPtr[2], result.iNodeMapPtr[3]);
-    // lseek(fd, 0, SEEK_SET);
-    // int n_read = read(fd, &result, sizeof(struct CheckpointRegion));
-    // printf("n_read: %d, err_no:%d, size:%ld\n", n_read, errno, sizeof(struct CheckpointRegion));
-    // printf("endOfLog: %d, [%d, %d, %d, %d]\n", result.endOfLog, result.iNodeMapPtr[0], result.iNodeMapPtr[1], result.iNodeMapPtr[2], result.iNodeMapPtr[3]);
-
-
-    // LOOKUP
-    // int lookup_inode = mfs_lookup(0, "..");
-    // printf("lookup_inode:%d\n", lookup_inode);
-    // lookup_inode = mfs_lookup(0, ".");
-    // printf("lookup_inode:%d\n", lookup_inode);
-    // lookup_inode = mfs_lookup(0, "NOT_EXISTS");
-    // printf("lookup_inode:%d\n", lookup_inode);
-    // lookup_inode = mfs_lookup(10, "..");
-    // printf("lookup_inode:%d\n", lookup_inode);
-    // lookup_inode = mfs_lookup(9000, "..");
-    // printf("lookup_inode:%d\n", lookup_inode);
-
-
-    // PRINTING CACHED MAP
-    // for (int i = 0; i < MAX_NUM_INODES_PIECES; i++) {
-    //     for (int j = 0; j < MAX_INODES_MAP_ENTRIES; j++) {
-    //         if (cached_map[i][j] != -1) {
-    //             printf("[%d,%d] address:%d\n", i, j, cached_map[i][j]);
-    //         }
-    //     }
-    // }
-
-
-    // STAT
-    // MFS_Stat_t m;
-    // m.size = 0;
-    // m.type = 0;
-    // printf("BEFORE\n");
-    // mfs_stat(0, &m);
-    // printf("AFTER\n");
-    // printf("stat of root: size:%d, type:%d\n", m.size, m.type);
-
-    // READ
-    // char data[MFS_BLOCK_SIZE];
-    // int read_status = mfs_read(0, data, 0);
-    // printf("read_status:%d\n", read_status);
-    // printf("data: %s\n", data);
-    // MFS_DirEnt_t dir_data[MAX_NUM_DIR_ENTRY_PER_BLOCK];
-    // // dir_data = (MFS_DirEnt_t *) data;
-    // memcpy(dir_data, data, MFS_BLOCK_SIZE);
-    // for (int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
-    //     printf("%s:%d\n", dir_data[i].name, dir_data[i].inum);
-    // }
-
-
-
-    // CREAT
-    // int creat_status = mfs_creat(0, MFS_DIRECTORY, "dir_A");
-    // printf("creat_status:%d\n", creat_status);
-
-    // struct INode parent_inode;
-    // lseek(fd, 25604, SEEK_SET);
-    // int read_status = read(fd, &parent_inode, sizeof(struct INode));
-    // printf("read_status:%d\n", read_status);
-
-    // for(int i = 0; i < MAX_FILE_BLOCKS; i++) {
-    //     printf("%d:%d\n", i, parent_inode.ptr[i]);
-    // }
-
-    // printf("parent_inode.ptr[0]:%d\n", parent_inode.ptr[0]);
-
-    // MFS_DirEnt_t data_test[MAX_NUM_DIR_ENTRY_PER_BLOCK];
-    // lseek(fd, parent_inode.ptr[0], SEEK_SET);
-    // int read_data_status = read(fd, &data_test, sizeof(MFS_DirEnt_t) * MAX_NUM_DIR_ENTRY_PER_BLOCK);
-    // printf("read_data_status:%d\n", read_data_status);  
-    // for(int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
-    //     printf("%s:%d\n", data_test[i].name, data_test[i].inum);
-    // }
-
-    // int lookup_inode = mfs_lookup(0, "dir_A");
-    // printf("lookup_inode:%d\n", lookup_inode);
-
-    // char data[MFS_BLOCK_SIZE];
-    // int read_status = mfs_read(lookup_inode, data, 0);
-    // printf("read_status:%d\n", read_status);
-    // // printf("data: %s\n", data);
-    // MFS_DirEnt_t dir_data[MAX_NUM_DIR_ENTRY_PER_BLOCK];
-    // memcpy(dir_data, data, MFS_BLOCK_SIZE);
-    // for (int i = 0; i < MAX_NUM_DIR_ENTRY_PER_BLOCK; i++) {
-    //     printf("%s:%d\n", dir_data[i].name, dir_data[i].inum);
-    // }
-
-
-
-    // WRITE
-    // int creat_status = mfs_creat(0, MFS_REGULAR_FILE, "file_A");
-    // printf("creat_status:%d\n", creat_status);
-
-    // int lookup_inum = mfs_lookup(0, "file_A");
-    // printf("lookup_status:%d\n", lookup_inum);
-
-    // char message[4096];
-    // strcpy(message, "This is a file");
-    // int write_status = mfs_write(lookup_inum, message, 0);
-    // printf("write_status:%d\n", write_status);
-
-    // char result[4096];
-    // int read_status = mfs_read(lookup_inum, result, 0);
-    // printf("read_status:%d\n", read_status);
-    // printf("result:%s\n", result);
-
-
-    // Unlink
-    // int lookup_inum = mfs_lookup(0, "dir_A");
-    // printf("lookup_status:%d\n", lookup_inum);
-
-    // int unlink_status = mfs_unlink(0, "dir_A");
-    // printf("unlink_status:%d\n", unlink_status);
-
-    // lookup_inum = mfs_lookup(0, "dir_A");
-    // printf("lookup_status:%d\n", lookup_inum);
